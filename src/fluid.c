@@ -20,13 +20,17 @@ struct Cell{
     double fill_level; // how much liquid is inside the cell (between 0 and 1)
     int x;
     int y;
+    int flowing_down; // Flag determining if the cell's fluid is flowing down in the current simulation step
 };
+
+
 
 /// @brief Colors a cell on the screen
 /// @param surface The surface to draw to 
 /// @param x The x coordinate of the cell
 /// @param y The y coordinate of the cell
-void draw_cell(SDL_Surface* surface, struct Cell cell){
+/// @param fill_cell Determines if the cell should be filled or not
+void draw_cell(SDL_Surface* surface, struct Cell cell, int fill_cell){
     int pixel_x = cell.x * CELL_SIZE;
     int pixel_y = cell.y * CELL_SIZE;
 
@@ -37,10 +41,16 @@ void draw_cell(SDL_Surface* surface, struct Cell cell){
 
     // Water fill level
     if(cell.type == WATER_TYPE){
-        int water_level = cell.fill_level > 1 ? CELL_SIZE : cell.fill_level * CELL_SIZE; //height of the water pixels
-        int empty_level = CELL_SIZE - water_level; // height of the empty pixels 
-        SDL_Rect water_rect = (SDL_Rect){ pixel_x, pixel_y + empty_level, CELL_SIZE, water_level };
-        SDL_FillRect(surface, &water_rect, COLOR_BLUE);
+        if(fill_cell == 0){
+            int water_level = cell.fill_level > 1 ? CELL_SIZE : cell.fill_level * CELL_SIZE; //height of the water pixels
+            int empty_level = CELL_SIZE - water_level; // height of the empty pixels 
+            
+            SDL_Rect water_rect = (SDL_Rect){ pixel_x, pixel_y + empty_level, CELL_SIZE, water_level };
+            SDL_FillRect(surface, &water_rect, COLOR_BLUE);
+        }
+        else{
+            SDL_FillRect(surface, &cell_rect, COLOR_BLUE);
+        }
     }
 
     // Solid cell
@@ -54,8 +64,25 @@ void draw_cell(SDL_Surface* surface, struct Cell cell){
 /// @param environment The environment containing the cell information 
 void draw_environment(SDL_Surface* surface, struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
     for(int i = 0; i < NUM_ROWS * NUM_COLUMNS; i++){
-        draw_cell(surface, environment[i]);
+        int x = environment[i].x;
+        int y = environment[i].y;
+
+        // Check if cell is flowing down and should be rendered as full
+        if(environment[i].flowing_down == 1 && environment[i].fill_level > 0.01){ 
+            // Check if the cell below is not water or is a border
+            if (y < NUM_ROWS - 1) {
+                struct Cell cell_below = environment[x + NUM_COLUMNS * (y + 1)];
+                if (cell_below.fill_level != WATER_TYPE || cell_below.fill_level < 1) {
+                    draw_cell(surface, environment[i], 1);
+                    continue;
+                }
+            }
+        }
+
+        draw_cell(surface, environment[i], 0);
     }
+
+    
 }
 
 /// @brief Draws the grid of cells on the screen
@@ -89,10 +116,11 @@ void simulation_rule_1(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
 
     for(int i = 0; i < NUM_ROWS * NUM_COLUMNS; i++){
         env_next[i] = environment[i];
+        env_next[i].flowing_down = 0;
     }
 
     // Water should drop to the cell below it unless a solid is under it 
-    for(int i = 0; i < NUM_ROWS; i++){
+    for(int i = NUM_ROWS - 1; i >= 0; i--){
         for(int j = 0; j < NUM_COLUMNS; j++){
             // Rule 1: Water flows down to neighboring cells 
             struct Cell src_cell = environment[j + NUM_COLUMNS * i];
@@ -102,18 +130,16 @@ void simulation_rule_1(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
 
                 // How much liquid can flow into dest cell 
                 // Only flows if dest cell has less liquid than source cell
-                if(dest_cell.fill_level < src_cell.fill_level){
+                if(dest_cell.fill_level < 1 && dest_cell.type == WATER_TYPE && src_cell.fill_level > 0){
                     // How much liquid can fit in to dest cell
                     double free_space_dest = 1 - dest_cell.fill_level;
+                    double transfer = (src_cell.fill_level < free_space_dest) ? src_cell.fill_level : free_space_dest;
 
-                    // If there is enough space in the dest cell, empty the source cell and fill the dest cell
-                    if(free_space_dest >= src_cell.fill_level){
-                        env_next[j + NUM_COLUMNS * i].fill_level = 0;
-                        env_next[j + NUM_COLUMNS * (i + 1)].fill_level += src_cell.fill_level;
-                    }
-                    else{ // If there is not enough space in the dest cell, fill it up and leave the rest in the source cell
-                        env_next[j + NUM_COLUMNS * i].fill_level -= free_space_dest;
-                        env_next[j + NUM_COLUMNS * (i + 1)].fill_level = 1;
+                    env_next[j + NUM_COLUMNS * i].fill_level -= transfer;
+                    env_next[j + NUM_COLUMNS * (i + 1)].fill_level += transfer;
+
+                    if(transfer > 0 && dest_cell.fill_level + transfer <= 1 && dest_cell.fill_level + transfer > src_cell.fill_level){
+                        env_next[j + NUM_COLUMNS * (i + 1)].flowing_down = 1;
                     }
                     
                 }
@@ -142,27 +168,25 @@ void simulation_rule_2(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
             struct Cell src_cell = environment[j + NUM_COLUMNS * i];
 
             // Check if the cell below is full or solid, or a boundary is reached, then check if the cell below is full or solid
-            if(i + 1 == NUM_ROWS || environment[j + NUM_COLUMNS * (i + 1)].fill_level > environment[j + NUM_COLUMNS * i].fill_level || environment[j + NUM_COLUMNS * (i + 1)].type == SOLID_TYPE){
+            if(i + 1 == NUM_ROWS || environment[j + NUM_COLUMNS * (i + 1)].fill_level >= 1 || environment[j + NUM_COLUMNS * (i + 1)].type == SOLID_TYPE){
                 if(src_cell.type == WATER_TYPE && j > 0){
                     struct Cell dest_cell = environment[(j - 1) + NUM_COLUMNS * i];
                     if(dest_cell.fill_level < src_cell.fill_level && dest_cell.type == WATER_TYPE){
-                        // Calculate the difference in fill levels between the source and destination cells
                         double d_fill = src_cell.fill_level - dest_cell.fill_level;
-                        
-                        // Move 1/3 of the difference to the destination cell
-                        env_next[j + NUM_COLUMNS * i].fill_level -= d_fill / 3;
-                        env_next[(j - 1) + NUM_COLUMNS * i].fill_level += d_fill / 3;
+                        double transfer_amount = d_fill / 3; // Move half of the difference to the destination cell
+
+                        env_next[j + NUM_COLUMNS * i].fill_level -= transfer_amount;
+                        env_next[(j - 1) + NUM_COLUMNS * i].fill_level += transfer_amount;
                     }
                 }
                 if(src_cell.type == WATER_TYPE && j < NUM_COLUMNS - 1){
                     struct Cell dest_cell = environment[(j + 1) + NUM_COLUMNS * i];
                     if(dest_cell.fill_level < src_cell.fill_level && dest_cell.type == WATER_TYPE){
-                        // Calculate the difference in fill levels between the source and destination cells
                         double d_fill = src_cell.fill_level - dest_cell.fill_level;
-                        
-                        // Move 1/3 of the difference to the destination cell
-                        env_next[j + NUM_COLUMNS * i].fill_level -= d_fill / 3;
-                        env_next[(j + 1) + NUM_COLUMNS * i].fill_level += d_fill / 3;
+                        double transfer_amount = d_fill / 3; // Move half of the difference to the destination cell
+
+                        env_next[j + NUM_COLUMNS * i].fill_level -= transfer_amount;
+                        env_next[(j + 1) + NUM_COLUMNS * i].fill_level += transfer_amount;
                     }
                 }
             }
@@ -293,6 +317,6 @@ int main(){
         draw_grid(surface);
 
         SDL_UpdateWindowSurface(window);
-        SDL_Delay(30);
+        SDL_Delay(10);
     }
 }
