@@ -218,7 +218,8 @@ void simulation_step(struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
     simulation_rule_2(environment);
 
     // Rule 3: Flowing Upwards with Pressure
-    simulation_rule_3(environment);
+    // TODO: This is not working as intended rn, not sure what's going wrong but im focusing on rendering now pressure is for losers anyways
+    // simulation_rule_3(environment);
 
     
 
@@ -266,14 +267,7 @@ int main(){
                         cell = (struct Cell) { type, fill_level, cell_x, cell_y };
                     }
                     else{
-                        
-                        if(environment[cell_x + NUM_COLUMNS * cell_y].fill_level > 1){
-                            fill_level = environment[cell_x + NUM_COLUMNS * cell_y].fill_level + 0.2;
-                        }
-                        else{
-                            fill_level = environment[cell_x + NUM_COLUMNS * cell_y].fill_level + 1;
-                        }
-
+                        fill_level = 1;
                         cell = (struct Cell) { type, fill_level, cell_x, cell_y };
                     }
 
