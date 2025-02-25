@@ -37,7 +37,7 @@ void draw_cell(SDL_Surface* surface, struct Cell cell){
 
     // Water fill level
     if(cell.type == WATER_TYPE){
-        int water_level = cell.fill_level * CELL_SIZE; //height of the water pixels
+        int water_level = cell.fill_level > 1 ? CELL_SIZE : cell.fill_level * CELL_SIZE; //height of the water pixels
         int empty_level = CELL_SIZE - water_level; // height of the empty pixels 
         SDL_Rect water_rect = (SDL_Rect){ pixel_x, pixel_y + empty_level, CELL_SIZE, water_level };
         SDL_FillRect(surface, &water_rect, COLOR_BLUE);
@@ -81,9 +81,8 @@ void init_environment(struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
     }
 }
 
-/// @brief Takes a step in the simulation
-/// @param environment The environment to simulate
-void simulation_step(struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
+void simulation_rule_1(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
+
     struct Cell env_next[NUM_ROWS * NUM_COLUMNS];
 
     for(int i = 0; i < NUM_ROWS * NUM_COLUMNS; i++){
@@ -103,19 +102,40 @@ void simulation_step(struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
                 // Only flows if dest cell has less liquid than source cell
                 if(dest_cell.fill_level < src_cell.fill_level){
                     // How much liquid can fit in to dest cell
-                    env_next[j + NUM_COLUMNS * i].fill_level = 0;
-                    env_next[j + NUM_COLUMNS * (i + 1)].fill_level += src_cell.fill_level;
+                    double free_space_dest = 1 - dest_cell.fill_level;
+                    
+                    if(free_space_dest >= src_cell.fill_level){
+                        env_next[j + NUM_COLUMNS * i].fill_level = 0;
+                        env_next[j + NUM_COLUMNS * (i + 1)].fill_level += src_cell.fill_level;
+                    }
+                    else{
+                        env_next[j + NUM_COLUMNS * i].fill_level -= free_space_dest;
+                        env_next[j + NUM_COLUMNS * (i + 1)].fill_level = 1;
+                    }
+                    
                 }
             }
         }
+    }
+
+    for(int i = 0; i < NUM_ROWS * NUM_COLUMNS; i++){
+        environment[i] = env_next[i];     
+    }
+}
+
+void simulation_rule_2(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
+
+    struct Cell env_next[NUM_ROWS * NUM_COLUMNS];
+
+    for(int i = 0; i < NUM_ROWS * NUM_COLUMNS; i++){
+        env_next[i] = environment[i];
     }
 
     for(int i = 0; i < NUM_ROWS; i++){
         for(int j = 0; j < NUM_COLUMNS; j++){
             // check if cell below is either full, solid, or bottom border
             struct Cell src_cell = environment[j + NUM_COLUMNS * i];
-            int below_full_or_solid = 0;
-            if(i + 1 == NUM_ROWS || environment[j + NUM_COLUMNS * (i + 1)].fill_level >= 1 || environment[j + NUM_COLUMNS * (i + 1)].type == SOLID_TYPE){
+            if(i + 1 == NUM_ROWS || environment[j + NUM_COLUMNS * (i + 1)].fill_level > environment[j + NUM_COLUMNS * i].fill_level || environment[j + NUM_COLUMNS * (i + 1)].type == SOLID_TYPE){
                 if(src_cell.type == WATER_TYPE && j > 0){
                     struct Cell dest_cell = environment[(j - 1) + NUM_COLUMNS * i];
                     if(dest_cell.fill_level < src_cell.fill_level && dest_cell.type == WATER_TYPE){
@@ -128,7 +148,7 @@ void simulation_step(struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
                 if(src_cell.type == WATER_TYPE && j < NUM_COLUMNS - 1){
                     struct Cell dest_cell = environment[(j + 1) + NUM_COLUMNS * i];
                     if(dest_cell.fill_level < src_cell.fill_level && dest_cell.type == WATER_TYPE){
-                        double d_fill = src_cell.fill_level - dest_cell.fill_level / 3;
+                        double d_fill = src_cell.fill_level - dest_cell.fill_level;
     
                         env_next[j + NUM_COLUMNS * i].fill_level -= d_fill / 3;
                         env_next[(j + 1) + NUM_COLUMNS * i].fill_level += d_fill / 3;
@@ -143,7 +163,25 @@ void simulation_step(struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
     }
 }
 
+/// @brief Takes a step in the simulation
+/// @param environment The environment to simulate
+void simulation_step(struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
+
+    // Rule 1: Water should fall down to the cell below it unless a solid is under it or the boundary is reached
+    simulation_rule_1(environment);
+
+    // Rule 2: Water should flow to the left or right if the cell below is full or solid and the cells to the left or right are not solid
+    simulation_rule_2(environment);
+
+    
+
+    
+
+    
+}
+
 /// @brief Simple fluid motion simulation with the ability to draw walls to contain the liquids
+/// @brief Simulation based on: https://www.jgallant.com/2d-liquid-simulator-with-cellular-automaton-in-unity/ 
 /// @return 
 int main(){
     SDL_Init(SDL_INIT_VIDEO);
@@ -201,6 +239,6 @@ int main(){
         draw_grid(surface);
 
         SDL_UpdateWindowSurface(window);
-        SDL_Delay(10);
+        SDL_Delay(30);
     }
 }
