@@ -321,6 +321,6 @@ int main(){
         draw_grid(surface);
 
         SDL_UpdateWindowSurface(window);
-        SDL_Delay(30);
+        SDL_Delay(10);
     }
 }
