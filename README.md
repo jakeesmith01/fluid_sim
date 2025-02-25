@@ -14,3 +14,5 @@ Left click to place a solid cell, press space bar to switch to placing water cel
 To toggle delete mode, press backspace
 
 To change the amount of cells, increase the CELL_SIZE defined at the top of fluid.c
+
+![Alt text](fluidsim.jpg)
