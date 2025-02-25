@@ -174,15 +174,51 @@ void simulation_rule_2(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
     }
 }
 
+/// @brief Implements Rule 3 of the logic, which allows water to flow upwards if the cells are pressurized
+/// @param environment 
+void simulation_rule_3(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
+    struct Cell env_next[NUM_ROWS * NUM_COLUMNS];
+
+    for(int i = 0; i < NUM_ROWS * NUM_COLUMNS; i++){
+        env_next[i] = environment[i];
+    }
+
+    for(int i = 0; i < NUM_ROWS; i++){
+        for(int j = 0; j < NUM_COLUMNS; j++){
+            struct Cell src_cell = environment[j + NUM_COLUMNS * i];
+
+            // Check if the source cells fill level is > 1 (This means there is pressure)
+            // Check if there is a water cell above the source cell to transfer the liquid in to
+
+            if(src_cell.fill_level > 1 && src_cell.type == WATER_TYPE && i > 0 && environment[j + NUM_COLUMNS * (i - 1)].type == WATER_TYPE && src_cell.fill_level > environment[j + NUM_COLUMNS * (i - 1)].fill_level){
+                struct Cell dest_cell = environment[j + NUM_COLUMNS * (i - 1)];
+
+                double transfer_fill = (src_cell.fill_level - 1);
+                printf("Transfer Fill: %f\n", transfer_fill);
+
+                env_next[j + NUM_COLUMNS * i].fill_level = 1;
+                env_next[j + NUM_COLUMNS * (i - 1)].fill_level += transfer_fill;
+            }
+        }
+    }
+
+    for(int i = 0; i < NUM_ROWS * NUM_COLUMNS; i++){
+        environment[i] = env_next[i];     
+    }
+}
+
 /// @brief Takes a step in the simulation
 /// @param environment The environment to simulate
 void simulation_step(struct Cell environment[NUM_ROWS * NUM_COLUMNS]){
 
-    // Rule 1: Water should fall down to the cell below it unless a solid is under it or the boundary is reached
+    // Rule 1: Flowing Into Bottom Neighboring Cell
     simulation_rule_1(environment);
 
-    // Rule 2: Water should flow to the left or right if the cell below is full or solid and the cells to the left or right are not solid
+    // Rule 2: Flowing Into Left and Right Neighboring Cells
     simulation_rule_2(environment);
+
+    // Rule 3: Flowing Upwards with Pressure
+    simulation_rule_3(environment);
 
     
 
@@ -220,15 +256,28 @@ int main(){
                     // Get the cell that the mouse is currently over
                     int cell_x = event.motion.x / CELL_SIZE;
                     int cell_y = event.motion.y / CELL_SIZE;
-                    int fill_level = type ? 0 : 1;
+                    int fill_level;
+                    struct Cell cell;
 
-                    if(delete){
+                    if(delete != 0){
                         type = WATER_TYPE;
                         fill_level = 0;
+                        
+                        cell = (struct Cell) { type, fill_level, cell_x, cell_y };
+                    }
+                    else{
+                        
+                        if(environment[cell_x + NUM_COLUMNS * cell_y].fill_level > 1){
+                            fill_level = environment[cell_x + NUM_COLUMNS * cell_y].fill_level + 0.2;
+                        }
+                        else{
+                            fill_level = environment[cell_x + NUM_COLUMNS * cell_y].fill_level + 1;
+                        }
+
+                        cell = (struct Cell) { type, fill_level, cell_x, cell_y };
                     }
 
-                    struct Cell cell = (struct Cell) { type, fill_level, cell_x, cell_y };
-
+                    
                     environment[cell_x + NUM_COLUMNS * cell_y] = cell;
                 }
             }
