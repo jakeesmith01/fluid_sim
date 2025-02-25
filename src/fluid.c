@@ -1,18 +1,19 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 
-#define WIDTH 900
-#define HEIGHT 600
+#define WIDTH 1200
+#define HEIGHT 900
 #define COLOR_WHITE 0xFFFFFFFF
 #define COLOR_BLACK 0x00000000
 #define COLOR_BLUE 0x34c3eb 
 #define COLOR_GRAY 0x1f1f1f1f
-#define CELL_SIZE 20 // size of each cell in pixels
+#define CELL_SIZE 8 // size of each cell in pixels
 #define LINE_WIDTH 2 // width of the lines that separate the cells
 #define NUM_COLUMNS WIDTH / CELL_SIZE 
 #define NUM_ROWS HEIGHT / CELL_SIZE
 #define WATER_TYPE 0
 #define SOLID_TYPE 1
+#define DAMPING 1.2
 
 
 struct Cell{
@@ -44,9 +45,12 @@ void draw_cell(SDL_Surface* surface, struct Cell cell, int fill_cell){
         if(fill_cell == 0){
             int water_level = cell.fill_level > 1 ? CELL_SIZE : cell.fill_level * CELL_SIZE; //height of the water pixels
             int empty_level = CELL_SIZE - water_level; // height of the empty pixels 
+
+            if(cell.fill_level > 0.02){
+                SDL_Rect water_rect = (SDL_Rect){ pixel_x, pixel_y + empty_level, CELL_SIZE, water_level };
+                SDL_FillRect(surface, &water_rect, COLOR_BLUE);
+            }
             
-            SDL_Rect water_rect = (SDL_Rect){ pixel_x, pixel_y + empty_level, CELL_SIZE, water_level };
-            SDL_FillRect(surface, &water_rect, COLOR_BLUE);
         }
         else{
             SDL_FillRect(surface, &cell_rect, COLOR_BLUE);
@@ -168,15 +172,15 @@ void simulation_rule_2(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
             struct Cell src_cell = environment[j + NUM_COLUMNS * i];
 
             // Check if the cell below is full or solid, or a boundary is reached, then check if the cell below is full or solid
-            if(i + 1 == NUM_ROWS || environment[j + NUM_COLUMNS * (i + 1)].fill_level >= 1 || environment[j + NUM_COLUMNS * (i + 1)].type == SOLID_TYPE){
+            if(i + 1 == NUM_ROWS || environment[j + NUM_COLUMNS * (i + 1)].fill_level >= 1){
                 if(src_cell.type == WATER_TYPE && j > 0){
                     struct Cell dest_cell = environment[(j - 1) + NUM_COLUMNS * i];
                     if(dest_cell.fill_level < src_cell.fill_level && dest_cell.type == WATER_TYPE){
                         double d_fill = src_cell.fill_level - dest_cell.fill_level;
                         double transfer_amount = d_fill / 3; // Move half of the difference to the destination cell
 
-                        env_next[j + NUM_COLUMNS * i].fill_level -= transfer_amount;
-                        env_next[(j - 1) + NUM_COLUMNS * i].fill_level += transfer_amount;
+                        env_next[j + NUM_COLUMNS * i].fill_level -= transfer_amount * DAMPING;
+                        env_next[(j - 1) + NUM_COLUMNS * i].fill_level += transfer_amount * DAMPING;
                     }
                 }
                 if(src_cell.type == WATER_TYPE && j < NUM_COLUMNS - 1){
@@ -185,8 +189,8 @@ void simulation_rule_2(struct Cell environment[NUM_ROWS*NUM_COLUMNS]){
                         double d_fill = src_cell.fill_level - dest_cell.fill_level;
                         double transfer_amount = d_fill / 3; // Move half of the difference to the destination cell
 
-                        env_next[j + NUM_COLUMNS * i].fill_level -= transfer_amount;
-                        env_next[(j + 1) + NUM_COLUMNS * i].fill_level += transfer_amount;
+                        env_next[j + NUM_COLUMNS * i].fill_level -= transfer_amount * DAMPING;
+                        env_next[(j + 1) + NUM_COLUMNS * i].fill_level += transfer_amount * DAMPING;
                     }
                 }
             }
@@ -317,6 +321,6 @@ int main(){
         draw_grid(surface);
 
         SDL_UpdateWindowSurface(window);
-        SDL_Delay(10);
+        SDL_Delay(30);
     }
 }
