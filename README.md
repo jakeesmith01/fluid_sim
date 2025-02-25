@@ -10,3 +10,7 @@ To compile and run the program:
 * Run the make command -> make
 * Run the program -> ./FluidSim
 
+Left click to place a solid cell, press space bar to switch to placing water cells
+To toggle delete mode, press backspace
+
+To change the amount of cells, increase the CELL_SIZE defined at the top of fluid.c
